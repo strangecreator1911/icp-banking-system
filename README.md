@@ -13,6 +13,10 @@ This is a DFINITY canister implementing a basic banking system. It allows users 
 
 ### Installation
 
-1. Clone this repository: ```git clone ```
+1. Clone the repository.
+2. Install dependencies using ```npm install```.
+3. Install dfx
+4. ```DFX_VERSION=0.15.0 sh -ci "$(curl -fsSL https://sdk.dfinity.org/install.sh)"```
+5. ```dfx start --background```.
 
 
