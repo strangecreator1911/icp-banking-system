@@ -1,25 +1,21 @@
-// cannister code goes here
-import { Server, StableBTreeMap } from 'azle';
-import express from 'express';
+// Import statements
+import express, { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { Server, StableBTreeMap, Option } from 'azle';
 
 // Define types for Customer, Account, Transaction, and Loan
-
-// Customer type
 type Customer = {
     id: string;
     name: string;
     balance: number;
 };
 
-// Account type
 type Account = {
     accountId: string;
     customerId: string;
     balance: number;
 };
 
-// Transaction type
 type Transaction = {
     id: string;
     accountId: string;
@@ -28,7 +24,6 @@ type Transaction = {
     timestamp: Date;
 };
 
-// Loan type
 type Loan = {
     id: string;
     customerId: string;
@@ -38,16 +33,23 @@ type Loan = {
 
 // Define storage for customers, accounts, transactions, and loans
 const customersStorage = StableBTreeMap<string, Customer>(0);
-const accountsStorage = StableBTreeMap<string, Account>(0);
-const transactionsStorage = StableBTreeMap<string, Transaction>(0);
-const loansStorage = StableBTreeMap<string, Loan>(0);
+const accountsStorage = StableBTreeMap<string, Account>(1);
+const transactionsStorage = StableBTreeMap<string, Transaction>(2);
+const loansStorage = StableBTreeMap<string, Loan>(3);
 
-export default Server(() => {
-    const app = express();
-    app.use(express.json());
+// Initialize Express app
+const app = express();
+app.use(express.json());
 
-    // Endpoint to create a new customer
-    app.post("/customers", (req, res) => {
+// Middleware for error handling
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+    console.error(err.stack);
+    res.status(500).send('Internal Server Error');
+});
+
+// Endpoint to create a new customer
+app.post("/customers", (req, res) => {
+    try {
         const { name } = req.body;
         const customerId = uuidv4();
         const newCustomer: Customer = {
@@ -57,10 +59,14 @@ export default Server(() => {
         };
         customersStorage.insert(customerId, newCustomer);
         res.json(newCustomer);
-    });
+    } catch (error) {
+        next(error);
+    }
+});
 
-    // Endpoint to create a new account for a customer
-    app.post("/accounts", (req, res) => {
+// Endpoint to create a new account for a customer
+app.post("/accounts", (req, res) => {
+    try {
         const { customerId } = req.body;
         const accountId = uuidv4();
         const newAccount: Account = {
@@ -70,10 +76,14 @@ export default Server(() => {
         };
         accountsStorage.insert(accountId, newAccount);
         res.json(newAccount);
-    });
+    } catch (error) {
+        next(error);
+    }
+});
 
-    // Endpoint to deposit funds into an account
-    app.post("/transactions/deposit", (req, res) => {
+// Endpoint to deposit funds into an account
+app.post("/transactions/deposit", (req, res) => {
+    try {
         const { accountId, amount } = req.body;
         const transactionId = uuidv4();
         const newTransaction: Transaction = {
@@ -84,19 +94,24 @@ export default Server(() => {
             timestamp: new Date(),
         };
         transactionsStorage.insert(transactionId, newTransaction);
+
         // Update account balance
-        const account = accountsStorage.get(accountId).Some;
-        if (account) {
-            account.balance += amount;
-            accountsStorage.insert(accountId, account);
-            res.json(account);
+        const account = accountsStorage.get(accountId);
+        if (account instanceof Option.Some) {
+            account.value.balance += amount;
+            accountsStorage.insert(accountId, account.value);
+            res.json(account.value);
         } else {
             res.status(404).send("Account not found");
         }
-    });
+    } catch (error) {
+        next(error);
+    }
+});
 
-    // Endpoint to withdraw funds from an account
-    app.post("/transactions/withdraw", (req, res) => {
+// Endpoint to withdraw funds from an account
+app.post("/transactions/withdraw", (req, res) => {
+    try {
         const { accountId, amount } = req.body;
         const transactionId = uuidv4();
         const newTransaction: Transaction = {
@@ -107,34 +122,43 @@ export default Server(() => {
             timestamp: new Date(),
         };
         transactionsStorage.insert(transactionId, newTransaction);
+
         // Update account balance
-        const account = accountsStorage.get(accountId).Some;
-        if (account) {
-            if (account.balance >= amount) {
-                account.balance -= amount;
-                accountsStorage.insert(accountId, account);
-                res.json(account);
+        const account = accountsStorage.get(accountId);
+        if (account instanceof Option.Some) {
+            if (account.value.balance >= amount) {
+                account.value.balance -= amount;
+                accountsStorage.insert(accountId, account.value);
+                res.json(account.value);
             } else {
                 res.status(400).send("Insufficient funds");
             }
         } else {
             res.status(404).send("Account not found");
         }
-    });
+    } catch (error) {
+        next(error);
+    }
+});
 
-    // Endpoint to check account balance
-    app.get("/accounts/:accountId/balance", (req, res) => {
+// Endpoint to check account balance
+app.get("/accounts/:accountId/balance", (req, res) => {
+    try {
         const accountId = req.params.accountId;
-        const account = accountsStorage.get(accountId).Some;
-        if (account) {
-            res.json({ balance: account.balance });
+        const account = accountsStorage.get(accountId);
+        if (account instanceof Option.Some) {
+            res.json({ balance: account.value.balance });
         } else {
             res.status(404).send("Account not found");
         }
-    });
+    } catch (error) {
+        next(error);
+    }
+});
 
-    // Endpoint to apply for a loan
-    app.post("/loans", (req, res) => {
+// Endpoint to apply for a loan
+app.post("/loans", (req, res) => {
+    try {
         const { customerId, amount } = req.body;
         const loanId = uuidv4();
         const newLoan: Loan = {
@@ -145,10 +169,23 @@ export default Server(() => {
         };
         loansStorage.insert(loanId, newLoan);
         res.json(newLoan);
-    });
+    } catch (error) {
+        next(error);
+    }
+});
 
-    // Endpoint to retrieve all transactions for an account
-    app.get("/accounts/:accountId/transactions", (req, res) => {
+// Endpoint to retrieve all transactions for an account
+app.get("/accounts/:accountId/transactions", (req, res) => {
+    try {
         const accountId = req.params.accountId;
         const accountTransactions = transactionsStorage.values().filter(transaction => transaction.accountId === accountId);
         res.json(accountTransactions);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Start the Express server
+export default Server(() => {
+    return app.listen();
+});
